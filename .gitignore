@@ -32,4 +32,4 @@
 *.app
 
 # Claude Files 
-.claude
+.claude/
