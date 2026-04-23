@@ -21,9 +21,9 @@
 #include "control.h"
 
 // pone a parpadear el led con el programa pio
-static void led_init(PIO pio, uint sm, uint offset, uint pin, uint freq) {
+static void led_init(PIO pio, uint sm, uint offset, uint pin, uint freq, bool enable) {
     blink_program_init(pio, sm, offset, pin);
-    pio_sm_set_enabled(pio, sm, true);
+    pio_sm_set_enabled(pio, sm, enable);
     pio->txf[sm] = (125000000 / (2 * freq)) - 3;
 }
 
@@ -37,11 +37,15 @@ static void imprimir_ayuda(void) {
 }
 
 int main() {
+    // led de estado: parpadea a 3 hz mientras el programa corre
+    PIO pio = pio0;
+    uint offset = pio_add_program(pio, &blink_program);
+    led_init(pio, 0, offset, PICO_DEFAULT_LED_PIN, 10, true);
+
     stdio_init_all();
-
     // esperar un poco para que la consola usb se conecte
-    sleep_ms(2000);
-
+    sleep_ms(6000);
+    led_init(pio, 0, offset, PICO_DEFAULT_LED_PIN, 3, true);
     printf("=== hsrl-control v0.2 ===\n");
     printf("placa: raspberry pi pico 2\n");
     printf("trigger: gpio%d | adc p+: gpio%d | adc p-: gpio%d\n",
@@ -51,12 +55,6 @@ int main() {
     imprimir_ayuda();
     printf("\n");
 
-    // led de estado: parpadea a 3 hz mientras el programa corre
-    PIO pio = pio0;
-    uint offset = pio_add_program(pio, &blink_program);
-#ifdef PICO_DEFAULT_LED_PIN
-    led_init(pio, 0, offset, PICO_DEFAULT_LED_PIN, 3);
-#endif
 
     // inicializar los modulos
     adc_capture_init();

@@ -10,8 +10,8 @@
 #define PIN_TRIGGER 2
 
 // uart hacia el seeder continuum
-#define PIN_SEEDER_TX 4
-#define PIN_SEEDER_RX 5
+#define PIN_SEEDER_TX 0
+#define PIN_SEEDER_RX 1
 
 // entradas analogicas para las señales del detector
 #define PIN_ADC_PP 26   // gpio26 = adc0, señal p+
