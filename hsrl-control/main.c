@@ -12,13 +12,19 @@
 #include <stdio.h>
 #include <string.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
 #include "hardware/pio.h"
+#include "hardware/sync.h"
 #include "blink.pio.h"
 
 #include "config.h"
 #include "adc_capture.h"
 #include "seeder_comm.h"
 #include "control.h"
+
+static ctrl_params_t g_params;
+static ctrl_estado_t g_estado;
+static critical_section_t g_cs;
 
 // pone a parpadear el led con el programa pio
 static void led_init(PIO pio, uint sm, uint offset, uint pin, uint freq, bool enable) {
@@ -34,6 +40,28 @@ static void imprimir_ayuda(void) {
     printf("  b = retroceder (baja temperatura heater)\n");
     printf("  g = enganche automatico (lock con ratio p+/p-)\n");
     printf("  e = finalizar programa\n");
+}
+
+// core1: espera comandos del usuario de forma bloqueante,
+// en paralelo con el loop de medicion en core0
+static void core1_cmd_task(void) {
+    while (true) {
+        int c = getchar();
+        if (c < 0) continue;
+        char ch = (char)c;
+
+        critical_section_enter_blocking(&g_cs);
+        control_comando(ch, &g_params, &g_estado);
+        critical_section_exit(&g_cs);
+
+        if (ch == 'e') {
+            printf("finalizando...\n");
+            break;
+        }
+        if (ch == 's' || ch == 'f' || ch == 'b' || ch == 'g') {
+            printf("[cmd] modo -> %c\n", ch);
+        }
+    }
 }
 
 int main() {
@@ -55,7 +83,6 @@ int main() {
     imprimir_ayuda();
     printf("\n");
 
-
     // inicializar los modulos
     adc_capture_init();
     seeder_init();
@@ -68,61 +95,53 @@ int main() {
         printf("aviso: no se pudo verificar el seeder, revisar conexion\n");
     }
 
-    // preparar el control
-    ctrl_params_t params;
-    ctrl_estado_t estado;
-    control_init(&params, &estado);
+    // preparar el control y lanzar core1 para manejar comandos
+    critical_section_init(&g_cs);
+    control_init(&g_params, &g_estado);
+    multicore_launch_core1(core1_cmd_task);
 
-    printf("heater sp inicial: %.4f | piezo: %.3f\n", params.heater_sp, params.piezo_v);
-    printf("limites heater: [%.2f, %.2f]\n", params.heater_min, params.heater_max);
-    printf("esperando trigger en gpio%d...\n\n", PIN_TRIGGER);
+    printf("heater sp inicial: %.4f | piezo: %.3f\n", g_params.heater_sp, g_params.piezo_v);
+    printf("limites heater: [%.2f, %.2f]\n", g_params.heater_min, g_params.heater_max);
 
     // contamos los ciclos para referencia
     int ciclo = 0;
 
-    while (control_activo(&estado)) {
-
-        // leer comando del usuario si hay algo en la consola usb
-        int c = getchar_timeout_us(0);
-        if (c != PICO_ERROR_TIMEOUT) {
-            char ch = (char)c;
-            control_comando(ch, &params, &estado);
-
-            if (ch == 'e') {
-                printf("finalizando...\n");
-                break;
-            }
-            if (ch == 's' || ch == 'f' || ch == 'b' || ch == 'g') {
-                printf("[%d] modo -> %c\n", ciclo, ch);
-            }
-        }
+    while (control_activo(&g_estado)) {
+        printf("[%d] \n", ciclo);
 
         // medir: espera dos pulsos de trigger (uno para p+, otro para p-)
+        // durante este bloqueo, core1 sigue atendiendo comandos del usuario
+        printf("esperando trigger en gpio%d...\n", PIN_TRIGGER);
         medicion_t med = adc_medir_ciclo();
 
         // actualizar la logica de control con las mediciones nuevas
-        control_actualizar(med.pp, med.pm, &params, &estado);
+        printf("[%d] medicion: pp=%.6f pm=%.6f\n", ciclo, med.pp, med.pm);
+        critical_section_enter_blocking(&g_cs);
+        control_actualizar(med.pp, med.pm, &g_params, &g_estado);
+        critical_section_exit(&g_cs);
 
         // mandar los setpoints al seeder por serial
-        seeder_set_piezo(params.piezo_v);
-        seeder_set_heater(params.heater_sp);
+        printf("[%d] aplicando control: d_heater=%+.6f\n", ciclo, g_estado.d_heater);
+        seeder_set_piezo(g_params.piezo_v);
+        seeder_set_heater(g_params.heater_sp);
 
         // leer los valores que el seeder reporta
+        printf("[%d] leyendo seeder...\n", ciclo);
         float piezo_real = seeder_leer_piezo();
         float heater_real = seeder_leer_heater();
 
         // mostrar estado por consola usb
         printf("[%d] modo=%c | heater_sp=%.4f heater_real=%.4f | piezo=%.3f piezo_real=%.4f\n",
-               ciclo, estado.modo, params.heater_sp, heater_real,
-               params.piezo_v, piezo_real);
+               ciclo, g_estado.modo, g_params.heater_sp, heater_real,
+               g_params.piezo_v, piezo_real);
         printf("     pp=%.6f pm=%.6f prt=%.6f | d_heater=%+.6f\n",
-               med.pp, med.pm, estado.prt, estado.d_heater);
+               med.pp, med.pm, g_estado.prt, g_estado.d_heater);
 
-        if (estado.modo == MODO_LOCK && params.lock_activo) {
+        if (g_estado.modo == MODO_LOCK && g_params.lock_activo) {
             printf("     lock: ref=%.6f banda=[%.6f, %.6f]\n",
-                   params.prt_ref,
-                   params.prt_ref / params.coe,
-                   params.prt_ref * params.coe);
+                   g_params.prt_ref,
+                   g_params.prt_ref / g_params.coe,
+                   g_params.prt_ref * g_params.coe);
         }
 
         ciclo++;

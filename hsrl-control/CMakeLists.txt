@@ -65,9 +65,11 @@ target_include_directories(hsrl-control PRIVATE
 # librerias del sdk que usamos
 target_link_libraries(hsrl-control
     pico_stdlib
+    pico_multicore
     hardware_pio
     hardware_adc
     hardware_uart
+    hardware_sync
 )
 
 pico_add_extra_outputs(hsrl-control)
