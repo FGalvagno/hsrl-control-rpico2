@@ -20,7 +20,7 @@
 #define ADC_CANAL_PM 1
 
 // --- comunicacion con el seeder ---
-#define SEEDER_UART uart1
+#define SEEDER_UART uart0
 #define SEEDER_BAUD 57600
 
 // --- parametros de control por defecto ---
