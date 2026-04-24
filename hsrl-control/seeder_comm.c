@@ -45,11 +45,10 @@ static void limpiar_rx(void) {
 
 void seeder_init(void) {
     uart_init(SEEDER_UART, SEEDER_BAUD);
-    gpio_set_function(PIN_SEEDER_TX, GPIO_FUNC_UART);
-    gpio_set_function(PIN_SEEDER_RX, GPIO_FUNC_UART);
-
+    gpio_set_function(PIN_SEEDER_TX, UART_FUNCSEL_NUM(SEEDER_UART, PIN_SEEDER_TX));
+    gpio_set_function(PIN_SEEDER_RX, UART_FUNCSEL_NUM(SEEDER_UART, PIN_SEEDER_RX));
+    
     // 8 bits de datos, 1 bit de stop, sin paridad
-    // igual que la config original del programa en windows
     uart_set_format(SEEDER_UART, 8, 1, UART_PARITY_NONE);
     uart_set_hw_flow(SEEDER_UART, false, false);
 }
