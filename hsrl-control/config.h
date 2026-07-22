@@ -7,7 +7,7 @@
 // --- pines ---
 
 // trigger del generador de ondas (entrada digital)
-#define PIN_TRIGGER 2
+#define PIN_TRIGGER 13
 
 // uart hacia el seeder continuum
 #define PIN_SEEDER_TX 0

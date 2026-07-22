@@ -53,7 +53,21 @@ void seeder_init(void) {
     uart_set_hw_flow(SEEDER_UART, false, false);
 }
 
+// imprime el comando por usb sin el \r\n final
+static void echo_tx(const char *cmd) {
+    // copiar hasta el primer \r o \n para no ensuciar la consola
+    char limpio[64];
+    int i = 0;
+    while (cmd[i] && cmd[i] != '\r' && cmd[i] != '\n' && i < (int)(sizeof(limpio) - 1)) {
+        limpio[i] = cmd[i];
+        i++;
+    }
+    limpio[i] = '\0';
+    printf("[rs232] >> %s\n", limpio);
+}
+
 void seeder_enviar(const char *cmd) {
+    echo_tx(cmd);
     uart_puts(SEEDER_UART, cmd);
 }
 
@@ -67,6 +81,12 @@ int seeder_consultar(const char *cmd, char *resp, int max_len) {
         n = leer_linea(resp, max_len);
     }
     limpiar_rx();
+
+    if (n > 0) {
+        printf("[rs232] << %s\n", resp);
+    } else {
+        printf("[rs232] << (sin respuesta)\n");
+    }
     return n;
 }
 
