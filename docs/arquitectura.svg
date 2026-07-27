@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="920" height="620" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif">
+
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9.5" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#546e7a"/>
+    </marker>
+  </defs>
+
+  <rect width="920" height="620" fill="#ffffff"/>
+
+  <!-- ============ laser host / sincronismo ============ -->
+  <rect x="370" y="34" width="200" height="60" rx="6"
+        fill="#f4f6f7" stroke="#90a4ae" stroke-width="1.5"/>
+  <text x="470" y="59" text-anchor="middle" font-size="14" font-weight="600" fill="#263238">Laser host</text>
+  <text x="470" y="78" text-anchor="middle" font-size="11" fill="#607d8b">circuito de sincronismo</text>
+
+  <!-- trigger -->
+  <line x1="470" y1="94" x2="470" y2="242" stroke="#546e7a" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="484" y="158" font-size="12" font-weight="600" fill="#37474f">trigger</text>
+  <text x="484" y="174" font-size="11" font-family="'Consolas',monospace" fill="#607d8b">GPIO13</text>
+
+  <!-- ============ detector ============ -->
+  <rect x="26" y="248" width="152" height="132" rx="6"
+        fill="#f4f6f7" stroke="#90a4ae" stroke-width="1.5"/>
+  <text x="102" y="303" text-anchor="middle" font-size="14" font-weight="600" fill="#263238">Detector</text>
+  <text x="102" y="323" text-anchor="middle" font-size="11" fill="#607d8b">señales p+ / p−</text>
+  <text x="102" y="341" text-anchor="middle" font-size="10" fill="#90a4ae">0 – 3.3 V</text>
+
+  <!-- p+ / p- -->
+  <line x1="178" y1="292" x2="348" y2="292" stroke="#546e7a" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="184" y="285" font-size="11" fill="#37474f"><tspan font-weight="600">p+</tspan><tspan font-family="'Consolas',monospace" fill="#607d8b">  GPIO26 · ADC0</tspan></text>
+
+  <line x1="178" y1="340" x2="348" y2="340" stroke="#546e7a" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="184" y="333" font-size="11" fill="#37474f"><tspan font-weight="600">p−</tspan><tspan font-family="'Consolas',monospace" fill="#607d8b">  GPIO27 · ADC1</tspan></text>
+
+  <!-- ============ pico ============ -->
+  <rect x="350" y="242" width="240" height="134" rx="8"
+        fill="#e9f1fb" stroke="#1565c0" stroke-width="2"/>
+  <text x="470" y="276" text-anchor="middle" font-size="16" font-weight="700" fill="#0d47a1">Raspberry Pi Pico 2</text>
+  <text x="470" y="294" text-anchor="middle" font-size="11" fill="#5472a8">RP2350</text>
+
+  <line x1="372" y1="310" x2="568" y2="310" stroke="#bcd3ee" stroke-width="1.2"/>
+
+  <text x="372" y="333" font-size="11.5" fill="#274b78"><tspan font-weight="700">core 0</tspan>  loop de medición</text>
+  <text x="372" y="353" font-size="11.5" fill="#274b78"><tspan font-weight="700">core 1</tspan>  consola de comandos</text>
+
+  <!-- ============ consola usb ============ -->
+  <rect x="742" y="248" width="152" height="132" rx="6"
+        fill="#f4f6f7" stroke="#90a4ae" stroke-width="1.5"/>
+  <text x="818" y="303" text-anchor="middle" font-size="14" font-weight="600" fill="#263238">PC / operador</text>
+  <text x="818" y="323" text-anchor="middle" font-size="11" fill="#607d8b">terminal serie</text>
+  <text x="818" y="341" text-anchor="middle" font-size="10" fill="#90a4ae">comandos y telemetría</text>
+
+  <line x1="596" y1="316" x2="736" y2="316" stroke="#546e7a" stroke-width="1.8"
+        marker-start="url(#ar)" marker-end="url(#ar)"/>
+  <text x="666" y="308" text-anchor="middle" font-size="11" font-weight="600" fill="#37474f">USB-CDC</text>
+
+  <!-- ============ seeder ============ -->
+  <line x1="470" y1="376" x2="470" y2="488" stroke="#546e7a" stroke-width="1.8" marker-end="url(#ar)"/>
+  <text x="484" y="424" font-size="12" font-weight="600" fill="#37474f">UART0 · 57600 8N1</text>
+  <text x="484" y="441" font-size="11" font-family="'Consolas',monospace" fill="#607d8b">GPIO0 TX / GPIO1 RX</text>
+  <text x="484" y="458" font-size="10.5" fill="#90a4ae">comandos tipo SCPI (RS-232)</text>
+
+  <rect x="330" y="490" width="280" height="80" rx="6"
+        fill="#fff5e8" stroke="#ef6c00" stroke-width="1.8"/>
+  <text x="470" y="521" text-anchor="middle" font-size="15" font-weight="700" fill="#bf5000">Seeder Continuum</text>
+  <text x="470" y="541" text-anchor="middle" font-size="11" fill="#a06030">heater (sintonía de λ) + piezo</text>
+  <text x="470" y="558" text-anchor="middle" font-size="10" fill="#c08a5e">fija la longitud de onda del láser</text>
+
+</svg>
