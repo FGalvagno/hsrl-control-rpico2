@@ -1,6 +1,6 @@
 // adc_capture.c : implementacion de la captura por adc con trigger externo
 // la idea es muestrear lo mas rapido posible mientras el trigger esta alto
-// y quedarse con el valor maximo de ese intervalo
+// y quedarse con el valor maximo de ese intervalo para tomar decisiones
 
 #include "adc_capture.h"
 #include "config.h"
@@ -43,7 +43,7 @@ uint16_t adc_capturar_pico(uint canal) {
     adc_fifo_setup(true, false, 1, false, false);
     adc_run(true);
 
-    // mientras el trigger este alto, sacar muestras del fifo
+    // mientras el trigger del laser este alto, sacar muestras del fifo
     // y quedarse con la mas grande
     while (gpio_get(PIN_TRIGGER)) {
         if (!adc_fifo_is_empty()) {
