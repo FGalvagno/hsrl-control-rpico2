@@ -14,9 +14,8 @@ typedef enum {
     MODO_FORWARD  = 'f',    // sube temperatura heater (longitud de onda crece)
     MODO_BACKWARD = 'b',    // baja temperatura heater (longitud de onda decrece)
     MODO_LOCK     = 'g',    // enganche automatico con ratio p+/p-
-    MODO_AUTO     = 'a',    // sintonizacion automatica: barre, busca los
-                            // minimos de p+ y p-, se para en el medio y
-                            // pasa solo a MODO_LOCK
+    MODO_AUTO     = 'a',    // va al punto medio entre los dos minimos
+                            // registrados y engancha el lock solo
     MODO_END      = 'e'     // terminar el programa
 } modo_t;
 
@@ -47,9 +46,6 @@ typedef struct {
     // se mide sobre una temperatura que todavia se esta moviendo.
     // wvcnt_lec.cpp usaba 15 s fijos
     uint32_t espera_ms;
-
-    // sintonizacion automatica (modo a)
-    int n_barridos;             // barridos de ida y vuelta antes de decidir
 } ctrl_params_t;
 
 // registro de un ciclo de medicion (para el historial)

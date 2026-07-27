@@ -6,7 +6,7 @@
 
 // --- pines ---
 
-// trigger del circuito de sincronismo del laser (entrada digital)
+// trigger del generador de ondas (entrada digital)
 #define PIN_TRIGGER 13
 
 // uart hacia el seeder continuum
@@ -74,21 +74,5 @@
 
 // tope para no dejar el ciclo detenido demasiado tiempo (10 min)
 #define ESPERA_MAX_MS 600000
-
-// --- sintonizacion automatica (modo a) ---
-
-// barridos de ida y vuelta que hace el modo auto antes de decidir.
-// mas barridos promedian mejor el ruido en la deteccion de los minimos,
-// pero cada tramo cuesta ~29 puntos por la espera de E. se cambia con S
-#define DEFAULT_N_BARRIDOS 1
-#define N_BARRIDOS_MAX 20
-
-// tope de puntos por tramo, por si alguien deja un paso muy chico
-// con el comando R y el barrido se vuelve eterno
-#define AUTO_PASOS_MAX 2000
-
-// el salto al extremo inferior (y el final al punto de operacion) son
-// excursiones mucho mas grandes que un paso: se espera este multiplo
-#define AUTO_ESPERA_LARGA_X 3
 
 #endif

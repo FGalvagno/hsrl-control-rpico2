@@ -1,5 +1,5 @@
 // control.c : implementacion de la logica de control de longitud de onda
-// basado en el esquema de wvcnt_lec.cpp (programa original de NIES):
+// basado en el esquema de wvcnt_lec.cpp:
 //   - modo stop (s): no hace nada
 //   - modo forward (f): sube heater en pasos gruesos
 //   - modo backward (b): baja heater en pasos gruesos
@@ -36,9 +36,6 @@ void control_init(ctrl_params_t *p, ctrl_estado_t *e) {
 
     // espera de estabilizacion antes de medir
     p->espera_ms = DEFAULT_ESPERA_MS;
-
-    // sintonizacion automatica
-    p->n_barridos = DEFAULT_N_BARRIDOS;
 
     // estado en cero
     memset(e, 0, sizeof(*e));
@@ -127,13 +124,9 @@ void control_actualizar(float pp, float pm, ctrl_params_t *p, ctrl_estado_t *e) 
             break;
 
         case MODO_AUTO:
-            // el barrido automatico maneja el heater por su cuenta desde
-            // core0, sin pasar por aca. si igual se llega a este caso,
-            // no tocar nada
-            e->d_piezo = 0.0f;
-            e->d_heater = 0.0f;
-            break;
-
+            // el modo auto maneja el heater por su cuenta desde core0 y
+            // no llega aca; el caso existe para no dejar el switch
+            // incompleto sobre el enum
         case MODO_END:
             e->d_piezo = 0.0f;
             e->d_heater = 0.0f;

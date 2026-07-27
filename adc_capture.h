@@ -1,6 +1,5 @@
 // adc_capture.h : modulo de captura por adc sincronizado con trigger externo
-// captura el valor pico de cada canal durante el pulso del circuito de
-// sincronismo del laser
+// captura el valor pico de cada canal durante el pulso del generador de ondas
 
 #ifndef ADC_CAPTURE_H
 #define ADC_CAPTURE_H

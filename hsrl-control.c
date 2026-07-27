@@ -1,29 +1,10 @@
-/*
- * hsrl-control.c
- *
- * Main program for wavelength control of HSRL (High Spectral Resolution Lidar)
- * Runs on Raspberry Pi Pico 2 (rp2350)
- *
- * Replaces the previous system that used a Tektronix oscilloscope connected
- * via USB-VISA to measure detector signals. The Pico now measures p+ and p-
- * directly with its ADC, synchronized to the laser host sync trigger.
- *
- * Communication with the Continuum seeder is via UART (serial), and the
- * user controls the system through a USB console.
- *
- * Author: Facundo Galvagno
- * Repository: hsrl-control-rpico2
- * File: c:\Users\Facundo Galvagno\Documents\GitHub\hsrl-control-rpico2\hsrl-control.c
- *
- * License: MIT
- */
 // main.c : programa principal de control de longitud de onda para hsrl
 // corre en raspberry pi pico 2 (rp2350)
 //
 // reemplaza al sistema anterior que usaba un osciloscopio tektronix
 // conectado por usb-visa para medir las señales del detector.
 // ahora el pico mide directamente p+ y p- con su adc, sincronizado
-// con el trigger del circuito de sincronismo del laser.
+// con el trigger del generador de ondas.
 //
 // la comunicacion con el seeder continuum es por uart (serial),
 // y el usuario controla todo desde una consola usb.
@@ -34,7 +15,10 @@
 //     f  -> forward (heater sube)
 //     b  -> backward (heater baja)
 //     g  -> lock automatico con ratio p+/p-
-//     a  -> sintonizacion automatica (barrido + lock, ver abajo)
+//     a  -> sintonizacion automatica: mientras se barre con f/b se guarda
+//           el minimo de p+ y el de p- con su temperatura (y se borran al
+//           parar con s). con 'a' va al punto medio entre esas dos
+//           temperaturas, espera 20 s, mide 4 ciclos y engancha el lock
 //     e  -> finalizar programa
 //     ?  -> mostrar parametros actuales (los que tiene el pico)
 //     !  -> consultar al seeder temperatura, piezo y flags de second mode
@@ -53,8 +37,13 @@
 //     I<val> -> heater paso fino           ej: I0.004438
 //     A<val> -> muestras a promediar (n)   ej: A5
 //     E<val> -> espera estabilizacion (s)  ej: E10
-//     S<val> -> barridos del modo auto     ej: S3
-
+//
+// sobre el promediado (comando A):
+//   con n=1 el ciclo mide un pico de p+ y uno de p- y manda la
+//   temperatura al seeder. con n=5 mide 5 picos de p+ y 5 de p-,
+//   promedia cada canal y recien ahi calcula el ratio y manda la
+//   temperatura. sirve para filtrar el ruido disparo a disparo,
+//   a costa de que cada ciclo tarde n veces mas.
 
 #include <stdio.h>
 #include <string.h>
@@ -63,7 +52,6 @@
 #include "hardware/sync.h"
 
 #include "config.h"
-// Interfaz y mensajes al usuario: español
 #include "adc_capture.h"
 #include "seeder_comm.h"
 #include "control.h"
@@ -78,8 +66,7 @@ static void imprimir_ayuda(void) {
     printf("  f  = avanzar (heater sube)\n");
     printf("  b  = retroceder (heater baja)\n");
     printf("  g  = enganche automatico (lock p+/p-)\n");
-    printf("  a  = sintonizacion automatica: barre, busca los minimos de\n");
-    printf("       p+ y p-, se para en el medio y engancha el lock\n");
+    printf("  a  = ir al punto medio entre los minimos y enganchar\n");
     printf("  e  = finalizar programa\n");
     printf("  ?  = mostrar parametros actuales (los que tiene el pico)\n");
     printf("  !  = consultar al seeder temperatura, piezo y smod flags\n");
@@ -98,7 +85,6 @@ static void imprimir_ayuda(void) {
     printf("  I<val> = heater paso fino         ej: I0.004438\n");
     printf("  A<val> = muestras a promediar     ej: A5   (1..%d)\n", N_PROM_MAX);
     printf("  E<val> = espera estabilizacion    ej: E10  (segundos, 0 = sin pausa)\n");
-    printf("  S<val> = barridos del modo auto   ej: S3   (1..%d)\n", N_BARRIDOS_MAX);
 }
 
 
@@ -116,8 +102,7 @@ static void procesar_linea(const char *linea) {
         critical_section_exit(&g_cs);
 
         switch (cmd) {
-            case 'a': printf("[ok] sintonizacion automatica pedida"
-                             " ('s' la aborta)\n"); break;
+            case 'a': printf("[ok] sintonizacion automatica\n"); break;
             case 's': printf("[ok] sistema detenido\n"); break;
             case 'f': printf("[ok] barriendo hacia adelante (heater subiendo)\n"); break;
             case 'b': printf("[ok] barriendo hacia atras (heater bajando)\n"); break;
@@ -149,8 +134,6 @@ static void procesar_linea(const char *linea) {
                snap_p.n_prom);
         printf("[estado] espera       = %.1f s  (estabilizacion antes de medir)\n",
                snap_p.espera_ms / 1000.0f);
-        printf("[estado] n_barridos   = %d  (ida y vuelta, modo auto)\n",
-               snap_p.n_barridos);
         printf("[estado] lock_activo  = %s\n",   snap_p.lock_activo ? "si" : "no");
         if (snap_p.lock_activo) {
             printf("[estado] prt_ref      = %.6f\n", snap_p.prt_ref);
@@ -328,13 +311,6 @@ static void procesar_linea(const char *linea) {
             if (espera_aplicada > ESPERA_MAX_MS) espera_aplicada = ESPERA_MAX_MS;
             g_params.espera_ms = espera_aplicada;
             break;
-        case 'S':
-            // barridos del modo auto: entero, se clampea al rango valido
-            n_aplicado = (val > 0.0f) ? (int)(val + 0.5f) : 1;
-            if (n_aplicado < 1)              n_aplicado = 1;
-            if (n_aplicado > N_BARRIDOS_MAX) n_aplicado = N_BARRIDOS_MAX;
-            g_params.n_barridos = n_aplicado;
-            break;
         default:  ok = false;                        break;
     }
     critical_section_exit(&g_cs);
@@ -358,161 +334,54 @@ static void procesar_linea(const char *linea) {
         case 'E': printf("[ok] espera de estabilizacion = %.1f s%s\n",
                          espera_aplicada / 1000.0f,
                          (espera_aplicada == 0) ? "  (sin pausa)" : ""); break;
-        case 'S': printf("[ok] barridos del modo auto = %d (ida y vuelta)\n",
-                         n_aplicado); break;
     }
 }
 
-// ---------------------------------------------------------------------
-// modo auto (comando a)
-//
-// hace n_barridos recorridos de ida y vuelta entre heater_min y
-// heater_max con el paso grueso. en cada punto mide y se queda con el
-// minimo de p+ y el minimo de p- vistos en todo el proceso, junto con la
-// temperatura donde ocurrio cada uno. cada canal absorbe en una longitud
-// de onda distinta, asi que los dos minimos caen en temperaturas
-// distintas; el punto de operacion es el punto medio entre ambas.
-// al terminar se para ahi y pasa solo a modo lock.
-//
-// corre entero en core0 porque necesita el adc. bloquea el loop de
-// medicion durante todo el barrido, que puede ser de varios minutos
-// ---------------------------------------------------------------------
+// --- sintonizacion automatica (modo a) ---
+// las cuatro variables: minimo de cada canal y la temperatura donde ocurrio
+static float pp_min, t_pp_min, pm_min, t_pm_min;
 
-// minimos rastreados durante el barrido
-typedef struct {
-    float pp_min, t_pp_min;
-    float pm_min, t_pm_min;
-} auto_minimos_t;
+// se llama una vez por ciclo, antes de control_actualizar (que aplica el
+// delta): asi la medicion queda asociada al setpoint con el que se tomo
+static void auto_actualizar(char modo, float t, float pp, float pm) {
+    if (modo == MODO_STOP) {
+        pp_min = t_pp_min = pm_min = t_pm_min = 0.0f;
+        return;
+    }
+    if (modo != MODO_FORWARD && modo != MODO_BACKWARD) return;
 
-// el usuario aborta el modo auto simplemente cambiando de modo:
-// alcanza con mirar si seguimos en MODO_AUTO
-static bool auto_sigue_activo(void) {
-    critical_section_enter_blocking(&g_cs);
-    bool sigue = (g_estado.modo == MODO_AUTO);
-    critical_section_exit(&g_cs);
-    return sigue;
+    // el == 0 cubre el arranque despues de un stop: la primera medicion
+    // entra siempre, sin necesidad de un flag aparte
+    if (pp_min == 0.0f || pp < pp_min) { pp_min = pp; t_pp_min = t; }
+    if (pm_min == 0.0f || pm < pm_min) { pm_min = pm; t_pm_min = t; }
 }
 
-// mide en una temperatura y actualiza los minimos
-static void auto_medir_punto(float t, const ctrl_params_t *snap,
-                             auto_minimos_t *m) {
-    seeder_set_heater(t);
-    sleep_ms(snap->espera_ms);
-
-    medicion_t med = adc_medir_ciclo_n((uint)snap->n_prom);
-
-    if (med.pp < m->pp_min) { m->pp_min = med.pp; m->t_pp_min = t; }
-    if (med.pm < m->pm_min) { m->pm_min = med.pm; m->t_pm_min = t; }
-
-    printf("[auto] t=%.4f  pp=%.6f  pm=%.6f\n", t, med.pp, med.pm);
-}
-
-static void modo_auto_ejecutar(void) {
-    // copia de los parametros: el barrido dura minutos y no queremos
-    // retener el lock, ni que un comando cambie los limites a mitad
-    ctrl_params_t snap;
-    critical_section_enter_blocking(&g_cs);
-    snap = g_params;
-    critical_section_exit(&g_cs);
-
-    float paso = snap.heater_paso_grueso;
-    if (paso <= 0.0f || snap.heater_max <= snap.heater_min) {
-        printf("[auto] rango o paso invalido, no se puede barrer\n");
-        critical_section_enter_blocking(&g_cs);
-        g_estado.modo = MODO_STOP;
-        critical_section_exit(&g_cs);
+static void auto_ejecutar(ctrl_params_t *p, ctrl_estado_t *e) {
+    // sin barrido previo las cuatro variables estan en cero y el punto
+    // medio daria 0.0, que el seeder rechaza con -222 data out of range
+    if (t_pp_min == 0.0f || t_pm_min == 0.0f) {
+        printf("[auto] no hay minimos registrados, barrer con f o b primero\n");
+        e->modo = MODO_STOP;
         return;
     }
 
-    // se recorre por indice y no acumulando t += paso, para que la ida y
-    // la vuelta visiten exactamente las mismas temperaturas y no se
-    // acumule error de redondeo a lo largo del barrido
-    int n_pasos = (int)((snap.heater_max - snap.heater_min) / paso) + 1;
-    if (n_pasos > AUTO_PASOS_MAX) {
-        n_pasos = AUTO_PASOS_MAX;
-        printf("[auto] aviso: paso muy chico, se limita a %d puntos por tramo\n",
-               AUTO_PASOS_MAX);
+    p->heater_sp = (t_pp_min + t_pm_min) / 2.0f;
+    printf("[auto] min p+ en %.4f | min p- en %.4f | setpoint %.4f\n",
+           t_pp_min, t_pm_min, p->heater_sp);
+
+    seeder_set_heater(p->heater_sp);
+    sleep_ms(20000);
+
+    // 4 ciclos en stop: miden y llenan hist[] sin mover el heater
+    e->modo = MODO_STOP;
+    for (int i = 0; i < 4; i++) {
+        medicion_t m = adc_medir_ciclo_n((uint)p->n_prom);
+        control_actualizar(m.pp, m.pm, p, e);
     }
 
-    auto_minimos_t m;
-    m.pp_min = m.pm_min = 1e30f;   // cualquier medicion real va a ser menor
-    m.t_pp_min = m.t_pm_min = 0.0f;
-
-    printf("[auto] %d barrido(s) ida y vuelta entre %.4f y %.4f, "
-           "paso %.6f, %d puntos por tramo\n",
-           snap.n_barridos, snap.heater_min, snap.heater_max, paso, n_pasos);
-    printf("[auto] estimado: ~%.1f min (espera de %.1f s por punto)\n",
-           (2.0f * n_pasos * snap.n_barridos * snap.espera_ms) / 60000.0f,
-           snap.espera_ms / 1000.0f);
-
-    // salto inicial al extremo inferior
-    printf("[auto] yendo al inicio (%.4f)...\n", snap.heater_min);
-    seeder_set_heater(snap.heater_min);
-    seeder_set_piezo(snap.piezo_v);
-    sleep_ms(snap.espera_ms * AUTO_ESPERA_LARGA_X);
-
-    for (int b = 0; b < snap.n_barridos; b++) {
-
-        printf("[auto] barrido %d/%d - ida\n", b + 1, snap.n_barridos);
-        for (int i = 0; i < n_pasos; i++) {
-            if (!auto_sigue_activo()) {
-                printf("[auto] abortado por el usuario\n");
-                return;
-            }
-            auto_medir_punto(snap.heater_min + i * paso, &snap, &m);
-        }
-
-        printf("[auto] barrido %d/%d - vuelta\n", b + 1, snap.n_barridos);
-        for (int i = n_pasos - 1; i >= 0; i--) {
-            if (!auto_sigue_activo()) {
-                printf("[auto] abortado por el usuario\n");
-                return;
-            }
-            auto_medir_punto(snap.heater_min + i * paso, &snap, &m);
-        }
-    }
-
-    // punto de operacion: el medio entre los dos minimos
-    float t_op = (m.t_pp_min + m.t_pm_min) / 2.0f;
-
-    printf("[auto] --- resultado ---\n");
-    printf("[auto] minimo p+ : t=%.4f  pp=%.6f\n", m.t_pp_min, m.pp_min);
-    printf("[auto] minimo p- : t=%.4f  pm=%.6f\n", m.t_pm_min, m.pm_min);
-    printf("[auto] punto de operacion = (%.4f + %.4f)/2 = %.4f\n",
-           m.t_pp_min, m.t_pm_min, t_op);
-
-    if (m.t_pp_min == m.t_pm_min) {
-        printf("[auto] aviso: los dos minimos cayeron en la misma "
-               "temperatura, revisar el rango o subir A\n");
-    }
-
-    // por las dudas, no salirse de los limites
-    if (t_op < snap.heater_min) t_op = snap.heater_min;
-    if (t_op > snap.heater_max) t_op = snap.heater_max;
-
-    // ir al punto y medir ahi la referencia del lock
-    printf("[auto] yendo al punto de operacion (%.4f)...\n", t_op);
-    seeder_set_heater(t_op);
-    sleep_ms(snap.espera_ms * AUTO_ESPERA_LARGA_X);
-
-    if (!auto_sigue_activo()) {
-        printf("[auto] abortado por el usuario\n");
-        return;
-    }
-
-    medicion_t med = adc_medir_ciclo_n((uint)snap.n_prom);
-    float prt = (med.pm > 0.0001f) ? (med.pp / med.pm) : 0.0f;
-
-    // cargar la referencia y enganchar. lock_activo en true hace que
-    // control_actualizar no pise prt_ref con el historial
-    critical_section_enter_blocking(&g_cs);
-    g_params.heater_sp   = t_op;
-    g_params.prt_ref     = prt;
-    g_params.lock_activo = true;
-    g_estado.modo        = MODO_LOCK;
-    critical_section_exit(&g_cs);
-
-    printf("[auto] enganchado en t=%.4f con prt_ref=%.6f\n", t_op, prt);
+    // el lock toma prt_ref de hist[2], que ahora ya esta estabilizado
+    e->modo = MODO_LOCK;
+    printf("[auto] enganchado en %.4f\n", p->heater_sp);
 }
 
 // core1: lee comandos del usuario de forma bloqueante,
@@ -655,10 +524,8 @@ int main() {
 
     while (control_activo(&g_estado)) {
 
-        // el modo auto se ejecuta entero aca y al terminar deja el
-        // sistema en lock, asi que no vuelve a entrar solo
         if (g_estado.modo == MODO_AUTO) {
-            modo_auto_ejecutar();
+            auto_ejecutar(&g_params, &g_estado);
             continue;
         }
 
@@ -693,6 +560,7 @@ int main() {
         printf("[%d] medicion (prom de %u): pp=%.6f pm=%.6f\n",
                ciclo, med.n, med.pp, med.pm);
         critical_section_enter_blocking(&g_cs);
+        auto_actualizar(g_estado.modo, g_params.heater_sp, med.pp, med.pm);
         control_actualizar(med.pp, med.pm, &g_params, &g_estado);
         critical_section_exit(&g_cs);
 
