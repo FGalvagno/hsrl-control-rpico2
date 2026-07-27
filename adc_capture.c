@@ -69,18 +69,50 @@ uint16_t adc_capturar_pico(uint canal) {
     return maximo;
 }
 
-medicion_t adc_medir_ciclo(void) {
+// version en punto flotante de adc_a_volts, para el promedio
+static float raw_f_a_volts(float raw) {
+    return raw * ADC_VREF / ADC_MAX_VAL;
+}
+
+medicion_t adc_medir_ciclo_n(uint n) {
     medicion_t m;
 
-    // primer pulso: canal p+
-    m.pp_raw = adc_capturar_pico(ADC_CANAL_PP);
-    m.pp = adc_a_volts(m.pp_raw);
+    // clamp de seguridad: n=0 no tiene sentido y un n enorme
+    // dejaria el ciclo esperando triggers por demasiado tiempo
+    if (n < 1) n = 1;
+    if (n > N_PROM_MAX) n = N_PROM_MAX;
 
-    // segundo pulso: canal p-
-    m.pm_raw = adc_capturar_pico(ADC_CANAL_PM);
-    m.pm = adc_a_volts(m.pm_raw);
+    // acumuladores de 32 bits: n picos de 12 bits nunca desbordan
+    // (N_PROM_MAX * 4095 queda muy por debajo de 2^32)
+    uint32_t acum_pp = 0;
+    uint32_t acum_pm = 0;
+
+    // se alterna p+ / p- en cada par de pulsos, igual que antes,
+    // asi las dos señales se muestrean intercaladas en el tiempo
+    for (uint i = 0; i < n; i++) {
+        acum_pp += adc_capturar_pico(ADC_CANAL_PP);   // pulso impar
+        acum_pm += adc_capturar_pico(ADC_CANAL_PM);   // pulso par
+    }
+
+    // el promedio se calcula en float para no perder resolucion:
+    // con n grande la parte fraccionaria vale mas que 1 lsb
+    float prom_pp = (float)acum_pp / (float)n;
+    float prom_pm = (float)acum_pm / (float)n;
+
+    m.pp = raw_f_a_volts(prom_pp);
+    m.pm = raw_f_a_volts(prom_pm);
+
+    // los campos crudos quedan redondeados al entero mas cercano,
+    // son solo informativos
+    m.pp_raw = (uint16_t)(prom_pp + 0.5f);
+    m.pm_raw = (uint16_t)(prom_pm + 0.5f);
+    m.n = n;
 
     return m;
+}
+
+medicion_t adc_medir_ciclo(void) {
+    return adc_medir_ciclo_n(1);
 }
 
 float adc_a_volts(uint16_t raw) {

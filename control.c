@@ -31,6 +31,15 @@ void control_init(ctrl_params_t *p, ctrl_estado_t *e) {
     p->prt_ref = 0.0f;
     p->lock_activo = false;
 
+    // promediado
+    p->n_prom = DEFAULT_N_PROM;
+
+    // espera de estabilizacion antes de medir
+    p->espera_ms = DEFAULT_ESPERA_MS;
+
+    // sintonizacion automatica
+    p->n_barridos = DEFAULT_N_BARRIDOS;
+
     // estado en cero
     memset(e, 0, sizeof(*e));
     e->modo = MODO_STOP;
@@ -38,7 +47,7 @@ void control_init(ctrl_params_t *p, ctrl_estado_t *e) {
 
 void control_comando(char c, ctrl_params_t *p, ctrl_estado_t *e) {
     // solo aceptar caracteres validos como modo
-    if (c == 's' || c == 'f' || c == 'b' || c == 'g' || c == 'e') {
+    if (c == 's' || c == 'f' || c == 'b' || c == 'g' || c == 'e' || c == 'a') {
         e->modo = (modo_t)c;
     }
 
@@ -115,6 +124,14 @@ void control_actualizar(float pp, float pm, ctrl_params_t *p, ctrl_estado_t *e) 
                 // dentro de la banda muerta, no tocar
                 e->d_heater = 0.0f;
             }
+            break;
+
+        case MODO_AUTO:
+            // el barrido automatico maneja el heater por su cuenta desde
+            // core0, sin pasar por aca. si igual se llega a este caso,
+            // no tocar nada
+            e->d_piezo = 0.0f;
+            e->d_heater = 0.0f;
             break;
 
         case MODO_END:

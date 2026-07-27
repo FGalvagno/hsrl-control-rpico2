@@ -6,6 +6,7 @@
 #define CONTROL_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 // modos de operacion del controlador
 typedef enum {
@@ -13,6 +14,9 @@ typedef enum {
     MODO_FORWARD  = 'f',    // sube temperatura heater (longitud de onda crece)
     MODO_BACKWARD = 'b',    // baja temperatura heater (longitud de onda decrece)
     MODO_LOCK     = 'g',    // enganche automatico con ratio p+/p-
+    MODO_AUTO     = 'a',    // sintonizacion automatica: barre, busca los
+                            // minimos de p+ y p-, se para en el medio y
+                            // pasa solo a MODO_LOCK
     MODO_END      = 'e'     // terminar el programa
 } modo_t;
 
@@ -34,6 +38,18 @@ typedef struct {
     float coe;                  // coeficiente de banda muerta
     float prt_ref;              // ratio de referencia al entrar en lock
     bool lock_activo;           // indica si ya se capturo la referencia
+
+    // promediado
+    int n_prom;                 // picos de p+ y p- a promediar por ciclo
+
+    // espera de estabilizacion antes de digitalizar. el heater tiene
+    // inercia termica y no llega al setpoint al instante: sin esta pausa
+    // se mide sobre una temperatura que todavia se esta moviendo.
+    // wvcnt_lec.cpp usaba 15 s fijos
+    uint32_t espera_ms;
+
+    // sintonizacion automatica (modo a)
+    int n_barridos;             // barridos de ida y vuelta antes de decidir
 } ctrl_params_t;
 
 // registro de un ciclo de medicion (para el historial)
