@@ -1,10 +1,29 @@
+/*
+ * hsrl-control.c
+ *
+ * Main program for wavelength control of HSRL (High Spectral Resolution Lidar)
+ * Runs on Raspberry Pi Pico 2 (rp2350)
+ *
+ * Replaces the previous system that used a Tektronix oscilloscope connected
+ * via USB-VISA to measure detector signals. The Pico now measures p+ and p-
+ * directly with its ADC, synchronized to the laser host sync trigger.
+ *
+ * Communication with the Continuum seeder is via UART (serial), and the
+ * user controls the system through a USB console.
+ *
+ * Author: Facundo Galvagno
+ * Repository: hsrl-control-rpico2
+ * File: c:\Users\Facundo Galvagno\Documents\GitHub\hsrl-control-rpico2\hsrl-control.c
+ *
+ * License: MIT
+ */
 // main.c : programa principal de control de longitud de onda para hsrl
 // corre en raspberry pi pico 2 (rp2350)
 //
 // reemplaza al sistema anterior que usaba un osciloscopio tektronix
 // conectado por usb-visa para medir las señales del detector.
 // ahora el pico mide directamente p+ y p- con su adc, sincronizado
-// con el trigger del generador de ondas.
+// con el trigger del circuito de sincronismo del laser.
 //
 // la comunicacion con el seeder continuum es por uart (serial),
 // y el usuario controla todo desde una consola usb.
@@ -35,23 +54,7 @@
 //     A<val> -> muestras a promediar (n)   ej: A5
 //     E<val> -> espera estabilizacion (s)  ej: E10
 //     S<val> -> barridos del modo auto     ej: S3
-//
-// sobre la sintonizacion automatica (comando a):
-//   hace S barridos de ida y vuelta entre heater_min y heater_max con el
-//   paso grueso. en cada punto mide y se queda con el minimo de p+ y el
-//   minimo de p- de todo el proceso, con la temperatura de cada uno.
-//   los dos canales absorben en longitudes de onda distintas, asi que
-//   sus minimos caen en temperaturas distintas: el punto de operacion es
-//   el punto medio entre ambas. al terminar se para ahi, toma el ratio
-//   como referencia y pasa solo a modo lock.
-//   se aborta con 's' en cualquier momento.
-//
-// sobre el promediado (comando A):
-//   con n=1 el ciclo mide un pico de p+ y uno de p- y manda la
-//   temperatura al seeder. con n=5 mide 5 picos de p+ y 5 de p-,
-//   promedia cada canal y recien ahi calcula el ratio y manda la
-//   temperatura. sirve para filtrar el ruido disparo a disparo,
-//   a costa de que cada ciclo tarde n veces mas.
+
 
 #include <stdio.h>
 #include <string.h>
@@ -60,6 +63,7 @@
 #include "hardware/sync.h"
 
 #include "config.h"
+// Interfaz y mensajes al usuario: español
 #include "adc_capture.h"
 #include "seeder_comm.h"
 #include "control.h"

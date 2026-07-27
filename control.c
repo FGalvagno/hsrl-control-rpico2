@@ -1,5 +1,5 @@
 // control.c : implementacion de la logica de control de longitud de onda
-// basado en el esquema de wvcnt_lec.cpp:
+// basado en el esquema de wvcnt_lec.cpp (programa original de NIES):
 //   - modo stop (s): no hace nada
 //   - modo forward (f): sube heater en pasos gruesos
 //   - modo backward (b): baja heater en pasos gruesos

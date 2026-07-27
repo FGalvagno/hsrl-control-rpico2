@@ -6,7 +6,7 @@
 
 // --- pines ---
 
-// trigger del generador de ondas (entrada digital)
+// trigger del circuito de sincronismo del laser (entrada digital)
 #define PIN_TRIGGER 13
 
 // uart hacia el seeder continuum
