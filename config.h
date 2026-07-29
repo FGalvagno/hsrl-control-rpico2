@@ -52,7 +52,7 @@
 #define HEATER_MAX 63.1f
 
 // coeficiente de banda muerta para el enganche automatico
-#define LOCK_COE 1.2f
+#define LOCK_COE 1.23f
 
 // --- promediado de mediciones ---
 
