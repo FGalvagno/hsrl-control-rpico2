@@ -37,12 +37,12 @@ uint16_t adc_capturar_pico(uint canal) {
     while (!gpio_get(PIN_TRIGGER)) {
         tight_loop_contents();
     }
-
+    sleep_us(2);  // delay del build up
     // arrancar free-running con fifo habilitado
     // parametros: fifo_en, dreq_en, dreq_thresh, err_in_fifo, byte_shift
     adc_fifo_setup(true, false, 1, false, false);
     adc_run(true);
-
+    
     // mientras el trigger este alto, sacar muestras del fifo
     // y quedarse con la mas grande
     while (gpio_get(PIN_TRIGGER)) {
